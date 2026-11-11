@@ -1,4 +1,5 @@
 import difflib
+import random
 import re
 
 from commands import app_launcher
@@ -20,12 +21,29 @@ def _handle_open_vscode(settings: dict) -> tuple[bool, str]:
     app_config = settings["apps"]["vscode"]
     success, message = app_launcher.launch(app_config)
     if success:
-        return True, "Opening Visual Studio Code."
+        return True, random.choice([
+            "Opening VS Code now.",
+            "Sure, launching VS Code.",
+            "Got it, VS Code is coming up.",
+        ])
     return False, message
 
 
 def _handle_close_session(settings: dict) -> tuple[bool, str]:
-    return True, "Closing."
+    return True, random.choice([
+        "Alright, signing off.",
+        "Okay, closing down.",
+        "Got it, see you.",
+    ])
+
+
+def _handle_greeting(settings: dict) -> tuple[bool, str]:
+    return True, random.choice([
+        "Hey! What can I do for you?",
+        "Hi there, I'm listening.",
+        "Hey, what's up?",
+        "Hi! Go ahead.",
+    ])
 
 
 COMMANDS = [
@@ -55,6 +73,21 @@ COMMANDS = [
             "exit",
         ],
         "handler": _handle_close_session,
+    },
+    {
+        "name": "greeting",
+        "aliases": [
+            "hi",
+            "hey",
+            "hello",
+            "hey jarvis",
+            "hi jarvis",
+            "yo",
+            "sup",
+            "whats up",
+            "what's up",
+        ],
+        "handler": _handle_greeting,
     },
 ]
 

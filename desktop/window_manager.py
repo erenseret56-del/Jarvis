@@ -1,4 +1,5 @@
 import logging
+import random
 
 from PySide6.QtCore import QObject, QThread, Signal
 
@@ -53,7 +54,11 @@ class ListenWorker(QThread):
         command = match_command(text, fuzzy_cutoff=s["fuzzy_match_cutoff"])
         command_name = command["name"] if command else ""
         if command is None:
-            response = "Command not recognized."
+            response = random.choice([
+                "Hmm, I didn't catch a command in that.",
+                "I don't have a command for that yet.",
+                "Not sure what you mean there, try again?",
+            ])
         else:
             try:
                 _success, response = command["handler"](s)
