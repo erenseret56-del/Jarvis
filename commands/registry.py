@@ -6,6 +6,8 @@ from commands import app_launcher
 _WHITESPACE_RE = re.compile(r"\s+")
 _PUNCT_RE = re.compile(r"[^\w\s]")
 
+CLOSE_SESSION = "close_session"
+
 
 def normalize(text: str) -> str:
     text = text.lower().strip()
@@ -22,6 +24,10 @@ def _handle_open_vscode(settings: dict) -> tuple[bool, str]:
     return False, message
 
 
+def _handle_close_session(settings: dict) -> tuple[bool, str]:
+    return True, "Closing."
+
+
 COMMANDS = [
     {
         "name": "open_vscode",
@@ -32,6 +38,23 @@ COMMANDS = [
             "launch visual studio code",
         ],
         "handler": _handle_open_vscode,
+    },
+    {
+        "name": CLOSE_SESSION,
+        "aliases": [
+            "close",
+            "stop",
+            "stop listening",
+            "jarvis close",
+            "jarvis stop",
+            "ok jarvis close",
+            "that's all",
+            "thats all",
+            "goodbye jarvis",
+            "never mind",
+            "exit",
+        ],
+        "handler": _handle_close_session,
     },
 ]
 
