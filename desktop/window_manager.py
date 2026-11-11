@@ -1,8 +1,8 @@
 import logging
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QThread, Signal
 
-from commands.registry import match_command
+from commands.registry import CLOSE_SESSION, match_command
 from speech.microphone import record_until_silence
 
 log = logging.getLogger("jarvis.window_manager")
@@ -11,7 +11,7 @@ log = logging.getLogger("jarvis.window_manager")
 class ListenWorker(QThread):
     status_changed = Signal(str)
     transcript_ready = Signal(str)
-    finished_cycle = Signal(str)
+    finished_cycle = Signal(str, str)
 
     def __init__(self, settings, stt, tts):
         super().__init__()
@@ -38,34 +38,45 @@ class ListenWorker(QThread):
 
         self.status_changed.emit("Thinking...")
         text = self._stt.transcribe(audio)
-        self.transcript_ready.emit(text if text else "(nothing recognized)")
         if self._cancelled:
             return
 
+        if not text:
+            # Nothing was said this round — loop back to listening quietly,
+            # without speaking, instead of nagging the user every few seconds.
+            self.transcript_ready.emit("(nothing heard)")
+            self.finished_cycle.emit("", "")
+            return
+
+        self.transcript_ready.emit(text)
+
         command = match_command(text, fuzzy_cutoff=s["fuzzy_match_cutoff"])
+        command_name = command["name"] if command else ""
         if command is None:
             response = "Command not recognized."
         else:
             try:
-                success, response = command["handler"](s)
+                _success, response = command["handler"](s)
             except Exception:
                 log.exception("Command handler '%s' raised an error.", command["name"])
-                success, response = False, "That command failed to run."
+                response = "That command failed to run."
 
         if self._cancelled:
             return
 
         self.status_changed.emit(response)
         self._tts.speak(response)
-        self.finished_cycle.emit(response)
+        self.finished_cycle.emit(response, command_name)
 
 
 class SessionController(QObject):
-    """Owns overlay + hotkey + speech engines and drives the summon/listen/respond loop."""
+    """Owns overlay + hotkey + speech engines and drives a continuous listen/respond
+    session: one hotkey press opens it, it keeps catching commands back-to-back, and
+    it only closes when the user says a close phrase or presses the hotkey again.
+    """
 
-    IDLE_HIDDEN = "idle_hidden"
+    IDLE = "idle"
     LISTENING = "listening"
-    IDLE_VISIBLE = "idle_visible"
 
     def __init__(self, overlay, settings, stt, tts):
         super().__init__()
@@ -73,24 +84,16 @@ class SessionController(QObject):
         self.settings = settings
         self.stt = stt
         self.tts = tts
-        self.state = self.IDLE_HIDDEN
+        self.state = self.IDLE
         self._worker = None
-
-        self._hide_timer = QTimer(self)
-        self._hide_timer.setSingleShot(True)
-        self._hide_timer.timeout.connect(self._auto_hide)
 
         self.overlay.trigger_listen.connect(self.on_hotkey)
 
     def on_hotkey(self):
-        if self.state in (self.LISTENING,):
+        if self.state == self.LISTENING:
             self._cancel_current()
             self.overlay.hide_overlay()
-            self.state = self.IDLE_HIDDEN
-        elif self.state == self.IDLE_VISIBLE:
-            self._hide_timer.stop()
-            self.overlay.hide_overlay()
-            self.state = self.IDLE_HIDDEN
+            self.state = self.IDLE
         else:
             self._start_cycle()
 
@@ -106,14 +109,14 @@ class SessionController(QObject):
         self._worker.finished_cycle.connect(self._on_cycle_finished)
         self._worker.start()
 
-    def _on_cycle_finished(self, _response: str):
-        self.state = self.IDLE_VISIBLE
-        self._hide_timer.start(int(self.settings["hide_after_seconds"] * 1000))
-
-    def _auto_hide(self):
-        if self.state == self.IDLE_VISIBLE:
+    def _on_cycle_finished(self, _response: str, command_name: str):
+        if self.state != self.LISTENING:
+            return  # session was cancelled via hotkey while this cycle was wrapping up
+        if command_name == CLOSE_SESSION:
             self.overlay.hide_overlay()
-            self.state = self.IDLE_HIDDEN
+            self.state = self.IDLE
+        else:
+            self._start_cycle()
 
     def _cancel_current(self):
         if self._worker is not None and self._worker.isRunning():
