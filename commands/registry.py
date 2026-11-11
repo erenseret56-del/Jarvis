@@ -9,12 +9,26 @@ _PUNCT_RE = re.compile(r"[^\w\s]")
 
 CLOSE_SESSION = "close_session"
 
+# Near-miss tolerance for a single mangled word, e.g. offline STT hearing "code"
+# as "cold". Not a cure for a wholly different transcription — only for a word
+# that still looks close to the real one. 0.75 is deliberately strict: looser
+# cutoffs started matching unrelated real words (e.g. "store" against "stop").
+_TOKEN_RATIO_CUTOFF = 0.75
+
 
 def normalize(text: str) -> str:
     text = text.lower().strip()
     text = _PUNCT_RE.sub("", text)
     text = _WHITESPACE_RE.sub(" ", text)
     return text
+
+
+def _token_matches_keyword(token: str, keyword: str, near_miss_words: set) -> bool:
+    if len(token) < 2:
+        return False
+    if token in near_miss_words:
+        return True
+    return difflib.SequenceMatcher(None, token, keyword).ratio() >= _TOKEN_RATIO_CUTOFF
 
 
 def _handle_open_vscode(settings: dict) -> tuple[bool, str]:
@@ -55,6 +69,10 @@ COMMANDS = [
             "launch vs code",
             "launch visual studio code",
         ],
+        # Used only as a last-resort fallback when the whole phrase doesn't match
+        # closely enough — catches a single garbled word around a clean intent.
+        "keywords": ["code", "vscode", "studio"],
+        "near_miss_words": {"coal", "call", "goal", "cole", "co"},
         "handler": _handle_open_vscode,
     },
     {
@@ -72,6 +90,10 @@ COMMANDS = [
             "never mind",
             "exit",
         ],
+        # No keyword fallback here on purpose: "close"/"stop" are common real
+        # words, and the exact/fuzzy phrase passes above already catch the
+        # intended short close phrases without risking an unrelated sentence
+        # ("close to the store") ending the session.
         "handler": _handle_close_session,
     },
     {
@@ -87,6 +109,8 @@ COMMANDS = [
             "whats up",
             "what's up",
         ],
+        # No keyword fallback: greeting only triggers on the phrase itself, so
+        # "hey" inside "hey jarvis open vs code" can't hijack a real command.
         "handler": _handle_greeting,
     },
 ]
@@ -98,6 +122,12 @@ def match_command(raw_text: str, fuzzy_cutoff: float = 0.75):
     Returns the matching command dict, or None if nothing matched closely enough.
     Only commands explicitly registered above can ever be returned — unknown or
     ambiguous phrases never trigger an action.
+
+    Matching is tried in three passes, each only applied if the previous found
+    nothing: 1) the full phrase said exactly, 2) the full phrase close enough to
+    an alias (handles stray words, e.g. "hey jarvis open vs code"), 3) a single
+    keyword fuzzily/phonetically close to a command's core keyword (handles one
+    mangled word inside an otherwise clear phrase).
     """
     text = normalize(raw_text)
     if not text:
@@ -115,5 +145,17 @@ def match_command(raw_text: str, fuzzy_cutoff: float = 0.75):
     )
     if close:
         return alias_to_command[close[0]]
+
+    tokens = text.split()
+    for command in COMMANDS:
+        keywords = command.get("keywords")
+        if not keywords:
+            continue
+        near_miss_words = command.get("near_miss_words", set())
+        for token in tokens:
+            if any(
+                _token_matches_keyword(token, kw, near_miss_words) for kw in keywords
+            ):
+                return command
 
     return None
