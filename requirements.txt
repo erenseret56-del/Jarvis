@@ -4,3 +4,9 @@ sounddevice==0.4.7
 numpy==1.26.4
 pyttsx3==2.90
 keyboard==0.13.5
+
+# llama-cpp-python needs a C/C++ toolchain (cmake) to build from source. On a
+# machine without one, install the prebuilt CPU wheel instead of plain
+# `pip install -r requirements.txt` for this one package:
+#   pip install llama-cpp-python --prefer-binary --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+llama-cpp-python==0.3.36

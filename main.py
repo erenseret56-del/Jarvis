@@ -3,6 +3,12 @@ import logging
 import os
 import sys
 
+# llama_cpp's native backend must finish loading its own DLLs before PySide6
+# touches the process's DLL search path — importing Qt first makes llama.cpp's
+# backend init segfault (access violation in llama_backend_init). Importing it
+# here, before any PySide6 import, is what avoids that.
+from ai.local_model import LocalAI
+
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -68,9 +74,33 @@ def main():
         overlay.show_overlay()
         return app.exec()
 
+    llm_path = os.path.join(BASE_DIR, settings["llm_model_path"])
+    if not os.path.isfile(llm_path):
+        message = (
+            f"Local AI model not found at '{llm_path}'. Download it (see README) "
+            "and update config/settings.json 'llm_model_path' if needed."
+        )
+        log.error(message)
+        overlay.set_status("Setup needed")
+        overlay.set_transcript(message)
+        overlay.show_overlay()
+        return app.exec()
+
+    overlay.set_status("Loading local AI model...")
+    overlay.show_overlay()
+    app.processEvents()
+    ai = LocalAI(
+        model_path=llm_path,
+        n_ctx=settings["llm_n_ctx"],
+        n_threads=settings["llm_n_threads"],
+        temperature=settings["llm_temperature"],
+        max_tokens=settings["llm_max_tokens"],
+    )
+    overlay.hide_overlay()
+
     tts = LocalTTS(settings["tts_rate"], settings["tts_volume"])
 
-    controller = SessionController(overlay, settings, stt, tts)
+    controller = SessionController(overlay, settings, stt, tts, ai)
 
     hotkey_manager = HotkeyManager(settings["hotkey"], overlay.trigger_listen.emit)
     hotkey_manager.start()
@@ -82,4 +112,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        logging.getLogger("jarvis.main").exception("JARVIS crashed.")
+        raise

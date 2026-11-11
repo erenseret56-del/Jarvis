@@ -7,7 +7,11 @@
   "silence_duration": 0.6,
   "tts_rate": 185,
   "tts_volume": 1.0,
-  "fuzzy_match_cutoff": 0.75,
+  "llm_model_path": "models/llm/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  "llm_n_ctx": 1024,
+  "llm_n_threads": 4,
+  "llm_temperature": 0.3,
+  "llm_max_tokens": 80,
   "apps": {
     "vscode": {
       "which": "code",
