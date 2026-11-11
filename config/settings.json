@@ -1,0 +1,20 @@
+{
+  "hotkey": "ctrl+space",
+  "vosk_model_path": "models/vosk-model-small-en-us-0.15",
+  "sample_rate": 16000,
+  "max_listen_seconds": 8,
+  "silence_threshold": 500,
+  "silence_duration": 1.0,
+  "hide_after_seconds": 4,
+  "tts_rate": 175,
+  "tts_volume": 1.0,
+  "fuzzy_match_cutoff": 0.75,
+  "apps": {
+    "vscode": {
+      "which": "code",
+      "fallback_paths": [
+        "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe"
+      ]
+    }
+  }
+}

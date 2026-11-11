@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Vosk speech model is a large downloaded asset, not source. See speech/speech_to_text.py
+# for the auto-generated setup message pointing users to the download URL.
+models/
+
+logs/*.log
